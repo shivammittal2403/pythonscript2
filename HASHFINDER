@@ -1,0 +1,71 @@
+import os
+import hashlib
+import zipfile
+import tarfile
+from pathlib import Path
+
+def calculate_hashes(line):
+    return {
+        "md5": hashlib.md5(line.encode('utf-8')).hexdigest(),
+        "sha256": hashlib.sha256(line.encode('utf-8')).hexdigest(),
+        "sha512": hashlib.sha512(line.encode('utf-8')).hexdigest()
+    }
+
+def extract_files(file_path, extract_to='extracted'):
+    Path(extract_to).mkdir(exist_ok=True)
+    if file_path.endswith('.zip'):
+        with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_to)
+            print(f"[INFO] Extracted zip file: {file_path}")
+    elif file_path.endswith('.tar') or file_path.endswith('.tar.gz') or file_path.endswith('.tgz'):
+        with tarfile.open(file_path, 'r:*') as tar_ref:
+            tar_ref.extractall(extract_to)
+            print(f"[INFO] Extracted tar file: {file_path}")
+    else:
+        print(f"[ERROR] Unsupported file format: {file_path}")
+    return extract_to
+
+def process_file(file_path, hashes_set, md5_file, sha256_file, sha512_file):
+    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            line = line.strip()
+            if line not in hashes_set:
+                hashes = calculate_hashes(line)
+                hashes_set.add(line)
+                md5_file.write(f"{hashes['md5']} {line}\n")
+                sha256_file.write(f"{hashes['sha256']} {line}\n")
+                sha512_file.write(f"{hashes['sha512']} {line}\n")
+
+def process_folder(folder_path, hashes_set, md5_file, sha256_file, sha512_file):
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            file_path = os.path.join(root, file)
+            print(f"[INFO] Processing file: {file_path}")
+            process_file(file_path, hashes_set, md5_file, sha256_file, sha512_file)
+
+def main(input_path):
+    hashes_set = set()
+
+    with open("all_hashes.txt", 'w') as all_file, \
+         open("md5_hashes.txt", 'w') as md5_file, \
+         open("sha256_hashes.txt", 'w') as sha256_file, \
+         open("sha512_hashes.txt", 'w') as sha512_file:
+        
+        if os.path.isfile(input_path):
+            if zipfile.is_zipfile(input_path) or tarfile.is_tarfile(input_path):
+                folder_path = extract_files(input_path)
+                process_folder(folder_path, hashes_set, md5_file, sha256_file, sha512_file)
+            else:
+                print(f"[INFO] Processing regular file: {input_path}")
+                process_file(input_path, hashes_set, md5_file, sha256_file, sha512_file)
+        elif os.path.isdir(input_path):
+            print(f"[INFO] Processing directory: {input_path}")
+            process_folder(input_path, hashes_set, md5_file, sha256_file, sha512_file)
+        else:
+            print("[ERROR] Invalid input path. Please provide a valid file or folder.")
+
+    print(f"[INFO] Processing complete. Total unique lines: {len(hashes_set)}")
+
+if __name__ == "__main__":
+    input_path = input("Enter the path to file or folder: ")
+    main(input_path)
